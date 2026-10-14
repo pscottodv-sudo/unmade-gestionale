@@ -134,15 +134,27 @@
     return {user:s.user,profile:prof};
   }
   async function signOut(){await SB.auth.signOut()}
+  // chiamata diretta al servizio di accesso (la funzione della libreria può restare in attesa senza rispondere)
   async function changePassword(pw){
-    const {error}=await SB.auth.updateUser({password:pw});
-    if(!error)return {ok:true};
-    const m=error.message||'',c=error.code||'';
-    if(c==='same_password'||/different from the old/i.test(m))return {error:'same'};
-    if(c==='weak_password'||/weak|at least|characters/i.test(m))return {error:'weak'};
-    if(c==='reauthentication_needed'||/reauth/i.test(m))return {error:'reauth'};
-    return {error:'network'};
+    let tok=null;
+    try{tok=JSON.parse(localStorage.getItem(SB.auth.storageKey)||'null').access_token}catch{}
+    if(!tok)return {error:'reauth'};
+    const ctl=new AbortController(),timer=setTimeout(()=>ctl.abort(),15000);
+    try{
+      const r=await fetch(CFG.url+'/auth/v1/user',{method:'PUT',signal:ctl.signal,
+        headers:{'Content-Type':'application/json',apikey:CFG.key,Authorization:'Bearer '+tok},
+        body:JSON.stringify({password:pw})});
+      if(r.ok)return {ok:true};
+      const j=await r.json().catch(()=>({}));
+      const c=j.error_code||j.code||'',m=j.msg||j.message||j.error_description||'';
+      if(c==='same_password'||/different from the old/i.test(m))return {error:'same'};
+      if(c==='weak_password'||/weak|at least|characters/i.test(m))return {error:'weak'};
+      if(r.status===401||r.status===403||c==='reauthentication_needed'||/reauth|jwt|expired/i.test(m))return {error:'reauth'};
+      return {error:'network'};
+    }catch(e){return {error:'network'}}
+    finally{clearTimeout(timer)}
   }
+
 
   window.UNMADE_BACKEND={createStore,assets,blobSrc,signIn,session,signOut,changePassword,onImages:fn=>{onImages=fn},client:SB};
 })();
