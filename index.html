@@ -292,7 +292,7 @@ body.booting .app,body.booting .tabbar,body.signed-out .app,body.signed-out .tab
     <section id="view-lens" hidden><div id="list-lens"></div></section>
     <section id="view-acc" hidden><div id="list-acc"></div></section>
   </main>
-  <footer class="foot"><span id="me"></span> · <button id="logout" type="button" data-en="Sign out">Esci</button></footer>
+  <footer class="foot"><span id="me"></span> · <button id="chpw" type="button" data-en="Change password">Cambia password</button> · <button id="logout" type="button" data-en="Sign out">Esci</button></footer>
 </div>
 
 <nav class="tabbar glass" role="tablist">
@@ -494,6 +494,25 @@ body.booting .app,body.booting .tabbar,body.signed-out .app,body.signed-out .tab
   </div>
 </section>
 
+<!-- password sheet -->
+<section class="sheet" id="sheet-pw" role="dialog" aria-modal="true" aria-labelledby="pw-heading" hidden>
+  <div class="grabber" aria-hidden="true"></div>
+  <div class="navbar">
+    <button class="navbtn" id="pw-cancel" type="button" data-en="Cancel">Annulla</button>
+    <h2 id="pw-heading" data-en="Change password">Cambia password</h2>
+    <button class="navbtn strong" id="pw-save" type="button" data-en="Save">Salva</button>
+  </div>
+  <form class="sheet-body" id="pw-form" autocomplete="on">
+    <input type="text" autocomplete="username" id="pw-user" hidden>
+    <div class="sh" data-en="New password">Nuova password</div>
+    <div class="group">
+      <div class="row field"><input id="pw-new" type="password" autocomplete="new-password" placeholder="Nuova password" aria-label="Nuova password" data-en-ph="New password" data-en-aria="New password"></div>
+      <div class="row field"><input id="pw-again" type="password" autocomplete="new-password" placeholder="Ripeti la nuova password" aria-label="Ripeti la nuova password" data-en-ph="Repeat the new password" data-en-aria="Repeat the new password"></div>
+    </div>
+    <div class="sf" id="pw-note"></div>
+  </form>
+</section>
+
 <div id="toast" class="toast glass" role="status" hidden></div>
 
 
@@ -646,9 +665,9 @@ $('add-btn').onclick=()=>{if(!S.db||!S.canWrite)return;S.tab==='projects'?openEd
 
 /* ---------- sheets ---------- */
 function showSheet(id){$('scrim').hidden=false;$(id).hidden=false;document.body.style.overflow='hidden';$(id).querySelector('.sheet-body').scrollTop=0}
-function hideSheets(){$('scrim').hidden=true;$('sheet-project').hidden=true;$('sheet-item').hidden=true;$('sheet-event').hidden=true;document.body.style.overflow=''}
-$('scrim').onclick=()=>{if(S.edit)closeEditor(true);else if(S.ev)closeEvent();else closeItem(true)};
-document.addEventListener('keydown',ev=>{if(ev.key!=='Escape')return;if(S.cs){closeCS();return}if(S.edit)closeEditor(true);else if(S.ev)closeEvent();else if(S.item)closeItem(true)});
+function hideSheets(){$('scrim').hidden=true;$('sheet-project').hidden=true;$('sheet-item').hidden=true;$('sheet-event').hidden=true;$('sheet-pw').hidden=true;document.body.style.overflow=''}
+$('scrim').onclick=()=>{if(S.pw)closePw();else if(S.edit)closeEditor(true);else if(S.ev)closeEvent();else closeItem(true)};
+document.addEventListener('keydown',ev=>{if(ev.key!=='Escape')return;if(S.cs){closeCS();return}if(S.pw){closePw();return}if(S.edit)closeEditor(true);else if(S.ev)closeEvent();else if(S.item)closeItem(true)});
 
 /* ---------- project list ---------- */
 function projectWarnings(p){
@@ -1300,7 +1319,7 @@ function applyLang(){
   if(S.item){itemHeading();if(KINDS[S.item.k].typed)fillTypeOptions($('i-type').value);renderItemSheet()}
   if(S.ev)renderEventSheet();
   if(S.cs){csSub();fillCSContact();renderCSPeople();renderCSExt();renderCSPreview()}
-  renderMe();
+  renderMe();if(S.pw)pwCheck();
 }
 document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{
   if(b.dataset.lang===LANG)return;
@@ -1346,6 +1365,29 @@ $('login-form').addEventListener('submit',async ev=>{
   showLogin(r.error==='wrong'?L('Username o password non corretti.','Wrong username or password.'):L('Impossibile collegarsi: controlla la connessione e riprova.','Can’t connect: check your connection and try again.'));
 });
 $('logout').onclick=async()=>{await BE.signOut().catch(()=>{});location.reload()};
+/* cambio password */
+const PW_MIN=8;
+function pwNote(msg,bad){const n=$('pw-note');n.className='sf'+(bad?' bad':'');n.textContent=msg||L(`Almeno ${PW_MIN} caratteri. Resti collegato su questo dispositivo.`,`At least ${PW_MIN} characters. You stay signed in on this device.`)}
+function pwCheck(){const a=$('pw-new').value,b=$('pw-again').value;$('pw-save').disabled=a.length<PW_MIN||a!==b;
+  if(b&&a!==b)pwNote(L('Le due password non coincidono.','The two passwords don’t match.'),true);else pwNote()}
+function openPw(){S.pw=true;$('pw-user').value=ME?ME.username:'';$('pw-new').value='';$('pw-again').value='';pwCheck();showSheet('sheet-pw');setTimeout(()=>$('pw-new').focus(),50)}
+function closePw(){S.pw=false;$('sheet-pw').hidden=true;hideSheets()}
+$('chpw').onclick=openPw;$('pw-cancel').onclick=closePw;
+$('pw-new').addEventListener('input',pwCheck);$('pw-again').addEventListener('input',pwCheck);
+async function savePw(){
+  const a=$('pw-new').value;if(a.length<PW_MIN||a!==$('pw-again').value)return;
+  const btn=$('pw-save');btn.disabled=true;btn.textContent=L('Salvo…','Saving…');
+  const r=await BE.changePassword(a).catch(()=>({error:'network'}));
+  btn.textContent=L('Salva','Save');
+  if(r.ok){closePw();toast(L('Password cambiata','Password changed'));return}
+  btn.disabled=false;
+  pwNote(r.error==='same'?L('La nuova password deve essere diversa da quella attuale.','The new password must be different from the current one.')
+    :r.error==='weak'?L('Password troppo debole: allungala o rendila meno prevedibile.','Password too weak: make it longer or less predictable.')
+    :r.error==='reauth'?L('Per sicurezza esci, rientra e riprova.','For security, sign out, sign back in and try again.')
+    :L('Impossibile salvare: controlla la connessione e riprova.','Couldn’t save: check your connection and try again.'),true);
+}
+$('pw-save').onclick=savePw;
+$('pw-form').addEventListener('submit',ev=>{ev.preventDefault();savePw()});
 
 (async()=>{
   applyStatic();renderHeader();

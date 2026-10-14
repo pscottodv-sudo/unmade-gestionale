@@ -134,6 +134,15 @@
     return {user:s.user,profile:prof};
   }
   async function signOut(){await SB.auth.signOut()}
+  async function changePassword(pw){
+    const {error}=await SB.auth.updateUser({password:pw});
+    if(!error)return {ok:true};
+    const m=error.message||'',c=error.code||'';
+    if(c==='same_password'||/different from the old/i.test(m))return {error:'same'};
+    if(c==='weak_password'||/weak|at least|characters/i.test(m))return {error:'weak'};
+    if(c==='reauthentication_needed'||/reauth/i.test(m))return {error:'reauth'};
+    return {error:'network'};
+  }
 
-  window.UNMADE_BACKEND={createStore,assets,blobSrc,signIn,session,signOut,onImages:fn=>{onImages=fn},client:SB};
+  window.UNMADE_BACKEND={createStore,assets,blobSrc,signIn,session,signOut,changePassword,onImages:fn=>{onImages=fn},client:SB};
 })();
