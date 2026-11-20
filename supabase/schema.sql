@@ -138,8 +138,8 @@ end $$;
 
 -- ---------- 3. Immagini (moodboard e foto del team), archivio privato ----------
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('media', 'media', false, 20971520, array['image/jpeg','image/png','image/webp','image/gif'])
-on conflict (id) do nothing;
+values ('media', 'media', false, 52428800, array['image/jpeg','image/png','image/webp','image/gif','application/pdf'])
+on conflict (id) do update set file_size_limit = excluded.file_size_limit, allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "media: lettura" on storage.objects;
 create policy "media: lettura" on storage.objects

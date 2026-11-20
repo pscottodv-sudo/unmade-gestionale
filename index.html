@@ -144,6 +144,10 @@ button.row:active,a.row:active{background:var(--fill)}
 .mbitem.link small{font-size:11px;color:var(--label2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .mbitem.link .lk{position:absolute;top:10px;left:10px;color:var(--tint)}
 .mbitem.link .lk svg.i{width:18px;height:18px}
+.mbitem.pdf{display:flex;flex-direction:column;justify-content:flex-end;padding:10px;gap:2px;color:var(--label);text-decoration:none;background:linear-gradient(160deg,var(--fill),transparent 70%),var(--fill)}
+.mbitem.pdf .tag{position:absolute;top:10px;left:10px;font-size:11px;font-weight:800;letter-spacing:.06em;color:#fff;background:#D9553A;border-radius:6px;padding:2px 6px}
+.mbitem.pdf b{font-size:13px;line-height:1.25;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;word-break:break-word}
+.mbitem.pdf small{font-size:11px;color:var(--label2)}
 .mbitem.loading{display:grid;place-items:center;font-size:12px;color:var(--label2)}
 .rm{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;border:0;padding:0;display:grid;place-items:center;background:rgba(0,0,0,.55);color:#fff;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);z-index:1}
 .rm svg.i{width:12px;height:12px;stroke-width:2.6}
@@ -348,7 +352,7 @@ body.booting .app,body.booting .tabbar,body.signed-out .app,body.signed-out .tab
     <div class="sh"><span>Moodboard</span><span class="cap" id="req-mb">Obbligatoria</span></div>
     <div class="group">
       <div class="mbgrid" id="mb-grid" hidden></div>
-      <div class="row tinted filepick" id="mb-filebtn"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></svg><span data-en="Upload images">Carica immagini</span><input id="f-files" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple aria-label="Carica immagini" data-en-aria="Upload images"></div>
+      <div class="row tinted filepick" id="mb-filebtn"><svg class="i" viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></svg><span data-en="Upload images or PDF">Carica immagini o PDF</span><input id="f-files" type="file" accept="image/jpeg,image/png,image/webp,image/gif,application/pdf,.pdf" multiple aria-label="Carica immagini o PDF" data-en-aria="Upload images or PDF"></div>
       <div class="row" id="mb-linkrow"><input id="f-link" type="url" placeholder="Incolla link (Pinterest, Milanote, Drive…)" aria-label="Link moodboard" data-en-ph="Paste a link (Pinterest, Milanote, Drive…)" data-en-aria="Moodboard link"><button class="act" id="f-link-add" type="button" data-en="Add">Aggiungi</button></div>
     </div>
     <div class="sf" id="mb-hint"></div>
@@ -684,7 +688,7 @@ function projectRow(p){
   const days=daysOf(p),ph=projPhase(p),t=todayISO();
   const next=days.find(d=>d>=t)||days[0];
   const [,m,d]=(ph==='pre'||ph==='shoot')&&next?next.split('-'):(days[0]||'').split('-');
-  const nt=idsOf(p,'team').length,nc=idsOf(p,'cam').length,nl=idsOf(p,'lens').length,na=idsOf(p,'acc').length,nm=(p.moodboard?.images||[]).length+(p.moodboard?.links||[]).length;
+  const nt=idsOf(p,'team').length,nc=idsOf(p,'cam').length,nl=idsOf(p,'lens').length,na=idsOf(p,'acc').length,nm=(p.moodboard?.images||[]).length+(p.moodboard?.links||[]).length+(p.moodboard?.pdfs||[]).length;
   const bits=[p.client,fmtDays(days)+(days.length>1?L(` (${days.length} giorni)`,` (${days.length} days)`):''),p.location?.name].filter(Boolean).join(' · ');
   const kit=[
     nt?`${nt} ${L(pl(nt,'persona','persone'),pl(nt,'person','people'))}`:'',
@@ -852,7 +856,7 @@ function openEditor(p){
     title:p?.title||'',client:p?.client||'',notes:p?.notes||'',locName:p?.location?.name||'',due:p?.dueDate||'',locUrl:p?.location?.url||'',
     days:p?daysOf(p):[],delivered:!!(p&&(p.delivered||p.status==='done')),
     sel:{team:[...(p?idsOf(p,'team'):[])],cam:[...(p?idsOf(p,'cam'):[])],lens:[...(p?idsOf(p,'lens'):[])],acc:[...(p?idsOf(p,'acc'):[])]},
-    links:[...(p?.moodboard?.links||[])],images:[...(p?.moodboard?.images||[])],
+    links:[...(p?.moodboard?.links||[])],images:[...(p?.moodboard?.images||[])],pdfs:(p?.moodboard?.pdfs||[]).map(x=>({...x})),
     createdAt:p?.createdAt||null,newUploads:[],removedImages:[],callSheets:{...(p?.callSheets||{})}
   };
   S.armedProject=false;
@@ -903,12 +907,17 @@ function renderMoodboard(){
   const imgs=e.images.map(id=>`<figure class="mbitem"><img src="${esc(blobSrc(id))}" alt="${L('Riferimento moodboard','Moodboard reference')}">${S.canWrite?`<button class="rm" data-rmimg="${esc(id)}" type="button" aria-label="${L('Rimuovi immagine','Remove image')}">${ICON.x}</button>`:''}</figure>`).join('');
   const links=e.links.map((l,i)=>{let host='';try{host=new URL(l.url).hostname.replace(/^www\./,'')}catch{}
     return `<div class="mbitem link"><a href="${esc(l.url)}" target="_blank" rel="noopener" style="position:absolute;inset:0" aria-label="${L('Apri','Open')} ${esc(host)}"></a><span class="lk">${ICON.link}</span><b>${esc(host||'link')}</b><small>${esc(l.url)}</small>${S.canWrite?`<button class="rm" data-rmlink="${i}" type="button" aria-label="${L('Rimuovi link','Remove link')}">${ICON.x}</button>`:''}</div>`}).join('');
+  const pdfs=e.pdfs.map(x=>{const u=blobSrc(x.id),ready=!u.startsWith('data:'),rm=S.canWrite?`<button class="rm" data-rmpdf="${esc(x.id)}" type="button" aria-label="${L('Rimuovi PDF','Remove PDF')}">${ICON.x}</button>`:'';
+    const inner=`<span class="tag">PDF</span><b>${esc(x.name||'PDF')}</b><small>${ready?L('Tocca per aprire','Tap to open'):L('Preparazione…','Preparing…')}</small>`;
+    return ready?`<div class="mbitem pdf"><a href="${esc(u)}" target="_blank" rel="noopener" style="position:absolute;inset:0" aria-label="${L('Apri','Open')} ${esc(x.name||'PDF')}"></a>${inner}${rm}</div>`:`<div class="mbitem pdf">${inner}${rm}</div>`}).join('');
   const loading=Array.from({length:S.uploading},()=>`<div class="mbitem loading">${L('Caricamento…','Uploading…')}</div>`).join('');
-  $('mb-grid').innerHTML=imgs+links+loading;
-  $('mb-grid').hidden=!(imgs||links||loading);
+  $('mb-grid').innerHTML=pdfs+imgs+links+loading;
+  $('mb-grid').hidden=!(pdfs||imgs||links||loading);
 }
 $('mb-grid').addEventListener('click',ev=>{
   const e=S.edit;if(!e)return;
+  const rp=ev.target.closest('[data-rmpdf]');
+  if(rp){ev.preventDefault();const id=rp.dataset.rmpdf;e.pdfs=e.pdfs.filter(x=>x.id!==id);e.removedImages.push(id);renderMoodboard();renderEditorLive();return}
   const ri=ev.target.closest('[data-rmimg]'),rl=ev.target.closest('[data-rmlink]');
   if(ri){const id=ri.dataset.rmimg;e.images=e.images.filter(x=>x!==id);e.removedImages.push(id);renderMoodboard();renderEditorLive()}
   if(rl){e.links.splice(+rl.dataset.rmlink,1);renderMoodboard();renderEditorLive()}
@@ -940,13 +949,16 @@ $('f-files').addEventListener('change',async ev=>{
   for(const f of files){
     S.uploading++;renderMoodboard();
     try{
-      const blob=await shrink(f);
-      const res=await S.assets.upload(blob,blob.type?undefined:{type:'image/jpeg'});
-      if(S.edit===e){e.images.push(res.id);e.newUploads.push(res.id)}else{try{await S.assets.delete(res.id)}catch{}}
+      const isPdf=f.type==='application/pdf'||/\.pdf$/i.test(f.name);
+      const blob=isPdf?f:await shrink(f);
+      const res=await S.assets.upload(blob,isPdf?{type:'application/pdf'}:blob.type?undefined:{type:'image/jpeg'});
+      if(S.edit===e){if(isPdf)e.pdfs.push({id:res.id,name:f.name.replace(/\.pdf$/i,'')});else e.images.push(res.id);e.newUploads.push(res.id)}else{try{await S.assets.delete(res.id)}catch{}}
     }catch(err){
       const c=err&&err.code;
-      toast(c==='too_large'?L(`${f.name} è troppo grande (max 20 MB).`,`${f.name} is too large (max 20 MB).`)
-        :c==='unsupported_type'?L(`${f.name}: usa JPG, PNG, WebP o GIF.`,`${f.name}: use JPG, PNG, WebP or GIF.`)
+      const pdf=/\.pdf$/i.test(f.name);
+      toast(c==='too_large'?L(`${f.name} è troppo grande (max ${pdf?50:20} MB).`,`${f.name} is too large (max ${pdf?50:20} MB).`)
+        :c==='unsupported_type'?(pdf?L('I PDF non sono ancora abilitati nell\'archivio: chiedi all\'amministratore.','PDFs aren’t enabled in storage yet: ask the administrator.')
+          :L(`${f.name}: usa JPG, PNG, WebP, GIF o PDF.`,`${f.name}: use JPG, PNG, WebP, GIF or PDF.`))
         :c==='quota_or_state'?T_FULL():c==='rate_limited'?T_RATE():L(`Caricamento di ${f.name} non riuscito.`,`Upload of ${f.name} failed.`));
     }finally{S.uploading--;renderMoodboard();renderEditorLive()}
   }
@@ -1008,7 +1020,7 @@ function checks(list=S.projects){
   return [
     {label:L('Titolo del progetto','Project title'),ok:!!e.title.trim()},
     {label:L('Almeno un giorno di shooting','At least one shooting day'),ok:e.days.length>0},
-    {label:L('Moodboard con almeno un riferimento','Moodboard with at least one reference'),ok:e.images.length+e.links.length>0&&!S.uploading,why:S.uploading?L('Attendi la fine del caricamento.','Wait for the upload to finish.'):''},
+    {label:L('Moodboard con almeno un riferimento','Moodboard with at least one reference'),ok:e.images.length+e.links.length+e.pdfs.length>0&&!S.uploading,why:S.uploading?L('Attendi la fine del caricamento.','Wait for the upload to finish.'):''},
     {label:L('Almeno una camera','At least one camera'),ok:e.sel.cam.length>0},
     {label:L('Almeno una lente','At least one lens'),ok:e.sel.lens.length>0},
     {label:L('Team e attrezzatura liberi in tutti i giorni','Team and equipment free on all days'),ok:e.days.length>0&&e.sel.cam.length+e.sel.lens.length>0&&!conflicts.length,conflicts,
@@ -1036,7 +1048,7 @@ function renderEditorLive(){
   $('checklist').innerHTML=cs.map(c=>`<div class="chk ${c.ok?'ok':''}"><span class="dot">${c.ok?ICON.check:''}</span><span>${esc(c.label)}</span>${!c.ok&&c.why?`<span class="why">${esc(c.why)}</span>`:''}</div>`).join('');
   const nd=e.days.length;
   setCap('req-dates',nd>0,`${nd} ${L(pl(nd,'giorno','giorni'),pl(nd,'day','days'))}`,L('Obbligatori','Required'));
-  setCap('req-mb',e.images.length+e.links.length>0,L('Inserita','Added'),L('Obbligatoria','Required'));
+  setCap('req-mb',e.images.length+e.links.length+e.pdfs.length>0,L('Inserita','Added'),L('Obbligatoria','Required'));
   const conflicts=cs[5].conflicts||[];
   Object.keys(KINDS).forEach(k=>{
     const has=e.sel[k].length>0,clash=conflicts.some(x=>x.k===k);const K=KINDS[k],n=e.sel[k].length;
@@ -1058,7 +1070,7 @@ $('p-save').onclick=async()=>{
       callSheets:cs,
       title:e.title.trim(),client:e.client.trim(),notes:e.notes.trim(),location:{name:e.locName.trim(),url:normUrl(e.locUrl)||''},dueDate:e.due||'',
       shootDays:e.days,shootStart:e.days[0],shootEnd:e.days[e.days.length-1],delivered:e.delivered,
-      teamIds:e.sel.team,cameraIds:e.sel.cam,lensIds:e.sel.lens,accessoryIds:e.sel.acc,moodboard:{images:e.images,links:e.links},createdAt:e.createdAt||now,updatedAt:now
+      teamIds:e.sel.team,cameraIds:e.sel.cam,lensIds:e.sel.lens,accessoryIds:e.sel.acc,moodboard:{images:e.images,links:e.links,pdfs:e.pdfs},createdAt:e.createdAt||now,updatedAt:now
     });
     if(S.assets){for(const id of e.removedImages){try{await S.assets.delete(id)}catch{}}}
     toast(e.isNew?L('Progetto creato','Project created'):L('Progetto aggiornato','Project updated'));
@@ -1071,7 +1083,7 @@ $('p-delete').onclick=async()=>{
   if(!S.armedProject){S.armedProject=true;b.classList.add('armed');editorStatic();return}
   try{
     await S.db.collection('projects').doc(e.id).delete();
-    if(S.assets){for(const id of [...e.images,...e.removedImages,...e.newUploads]){try{await S.assets.delete(id)}catch{}}}
+    if(S.assets){for(const id of [...e.images,...e.pdfs.map(x=>x.id),...e.removedImages,...e.newUploads]){try{await S.assets.delete(id)}catch{}}}
     toast(L('Progetto eliminato','Project deleted'));S.edit=null;hideSheets();
   }catch(err){dbFail(err,L('eliminare il progetto','delete the project'))}
 };
@@ -1084,7 +1096,7 @@ function applyPermissions(){
   $('p-save').hidden=!w;$('mb-linkrow').hidden=!w;$('day-add').hidden=!w;
   $('mb-filebtn').hidden=!w||!S.assets;
   $('mb-hint').textContent=!w?'':S.assets
-    ?L('Carica almeno un\'immagine oppure incolla il link della moodboard.','Upload at least one image or paste the moodboard link.')
+    ?L('Carica almeno un PDF o un\'immagine, oppure incolla il link della moodboard.','Upload at least one PDF or image, or paste the moodboard link.')
     :L('Incolla il link della moodboard. Il caricamento di immagini non è disponibile al momento.','Paste the moodboard link. Image uploads aren’t available right now.');
 }
 

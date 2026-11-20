@@ -100,9 +100,9 @@
   const assets={
     async upload(blob,opts){
       const type=(opts&&opts.type)||blob.type||'image/jpeg';
-      const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif'}[type];
+      const ext={'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','application/pdf':'pdf'}[type];
       if(!ext)throw {code:'unsupported_type',message:type};
-      if(blob.size>20*1024*1024)throw {code:'too_large',message:'max 20 MB'};
+      if(blob.size>(ext==='pdf'?50:20)*1024*1024)throw {code:'too_large',message:'too large'};
       const id=newId()+'.'+ext;
       const {error}=await SB.storage.from(BUCKET).upload(id,blob,{contentType:type,upsert:false});
       if(error)throw {code:/size|large/i.test(error.message)?'too_large':/mime|type/i.test(error.message)?'unsupported_type':'upstream_error',message:error.message};
